@@ -1,5 +1,5 @@
 # Hyperparameters
-EPOCHS = 50
+EPOCHS = 20
 BATCH_SIZE = 64
 VALIDATION_SPLIT = 0.1
 
