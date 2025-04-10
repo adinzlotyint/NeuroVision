@@ -4,6 +4,7 @@ import torch.optim as optim
 from config import EPOCHS, MODEL_SAVE_PATH, device
 from data import load_data
 import os
+import torch.onnx
 
 def train_model(model, model_name):
     train_loader, val_loader, test_loader = load_data()
@@ -72,10 +73,22 @@ def train_model(model, model_name):
     print(f"Model {model_name} - Test Accuracy: {test_accuracy:.4f}")
     print(f"Model {model_name} - Test Loss: {avg_test_loss:.4f}")
     
-    # Model saving
+    # Model saving (PyTorch format)
     save_path = MODEL_SAVE_PATH.format(model_name)
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     torch.save(model.state_dict(), save_path)
     print(f"Model {model_name} saved under: {save_path}")
     
+    # === ONNX Export ===
+    onnx_export_path = os.path.splitext(save_path)[0] + ".onnx"
+    dummy_input = torch.randn(1, 3, 32, 32).to(device)
+    torch.onnx.export(
+        model, dummy_input, onnx_export_path,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        opset_version=11
+    )
+    print(f"Model {model_name} exported to ONNX at: {onnx_export_path}")
+
     return history, test_accuracy, avg_test_loss
