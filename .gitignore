@@ -10,6 +10,8 @@
 *.userosscache
 *.sln.docstates
 
+NeuroVision.Training/data
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
