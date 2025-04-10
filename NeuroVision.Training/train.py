@@ -1,21 +1,81 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from config import EPOCHS, MODEL_SAVE_PATH, device
 from data import load_data
-from config import EPOCHS, BATCH_SIZE, VALIDATION_SPLIT, MODEL_SAVE_PATH
+import os
 
 def train_model(model, model_name):
-    (x_train, y_train), (x_test, y_test) = load_data()
+    train_loader, val_loader, test_loader = load_data()
     
-    history = model.fit(x_train, y_train, 
-                        epochs=EPOCHS,
-                        batch_size=BATCH_SIZE,
-                        validation_split=VALIDATION_SPLIT,
-                        verbose=2)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters())
+    model.to(device)
     
-    test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
-    print(f"Model {model_name} - Test Accuracy: {test_acc:.4f}")
-    print(f"Model {model_name} - Test Loss: {test_loss:.4f}")
-
+    history = {'train_loss': [], 'val_loss': [], 'val_accuracy': []}
+    
+    for epoch in range(EPOCHS):
+        model.train()
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+        
+        avg_train_loss = running_loss / len(train_loader)
+        
+        # Validation
+        model.eval()
+        val_loss = 0.0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = torch.max(outputs, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+        
+        avg_val_loss = val_loss / len(val_loader)
+        val_accuracy = correct / total
+        
+        history['train_loss'].append(avg_train_loss)
+        history['val_loss'].append(avg_val_loss)
+        history['val_accuracy'].append(val_accuracy)
+        
+        print(f"Epoch [{epoch+1}/{EPOCHS}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}, Val Acc: {val_accuracy:.4f}")
+    
+    # Evaluation on the test set
+    model.eval()
+    test_loss = 0.0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            test_loss += loss.item()
+            _, predicted = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    
+    avg_test_loss = test_loss / len(test_loader)
+    test_accuracy = correct / total
+    print(f"Model {model_name} - Test Accuracy: {test_accuracy:.4f}")
+    print(f"Model {model_name} - Test Loss: {avg_test_loss:.4f}")
+    
+    # Model saving
     save_path = MODEL_SAVE_PATH.format(model_name)
-    model.save(save_path)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    torch.save(model.state_dict(), save_path)
     print(f"Model {model_name} saved under: {save_path}")
     
-    return history, test_acc, test_loss
+    return history, test_accuracy, avg_test_loss
